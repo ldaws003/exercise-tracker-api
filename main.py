@@ -1,5 +1,7 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from google.oauth2 import id_token
+from google.auth.transport import requests
 import enum
 from sqlalchemy import Enum
 from flask_sqlalchemy import SQLAlchemy
@@ -30,6 +32,7 @@ class Users(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(30), unique=True, nullable=False)
+    username = db.Column(db.String(30), nullable=False)
 
 class ExerciseActivity(db.Model):
     __tablename__ = "exercise_activities"
@@ -41,6 +44,16 @@ class ExerciseActivity(db.Model):
     calories = db.Column(db.Integer, nullable=False)
 
 # TODO: check if this would overwrite existing tables
+
+# TODO: make into decorator and add as middleware to everything else
+# TODO: make sure frontend sends token to flask api end
+# try:
+#     idinfo = id_token.verify_oauth2_token(token, requests.Request(), "YOUR_GOOGLE_CLIEN_://googleusercontent.com")
+#     # user is signed in
+# except ValueError:
+#     # Invalid token
+#     pass
+
 
 # Create database tables in the PostgreSQL database
 with app.app_context():
@@ -58,10 +71,14 @@ def get_all_user_exercises():
                                    .order_by(ExerciseActivity.date)).scalars()
     return jsonify(exercises)
 
+#TODO: add what error handling
 # deleting an activity of a user
 @app.route('/delete-exercise-activity', methods=['DELETE'])
 def delete_activity():
-    return "Hello World"
+    data = request.get_json()
+    delete = db.session.execute(db.delete(ExerciseActivity)
+                                .where(ExerciseActivity.id == data.id)).commit()
+    return jsonify({})
 
 # TODO: make api endpoint for getting exercise data for charts
 
