@@ -1,16 +1,38 @@
 import os
 from flask import Flask, jsonify, request
-from google.oauth2 import id_token
-from google.auth.transport import requests
 import enum
 from sqlalchemy import Enum
 from flask_sqlalchemy import SQLAlchemy
+from functools import wraps
+import jwt
 
 # TODO: make sure that only user's loggedin in main app can use this api
 # TODO: look into encryption to secure db
 
 # getting the connection string from environment variables
 connection_string = os.getenv("POSTGRES_DB")
+
+# NextAuth Secret
+SECRET_KEY = os.getenv("AUTH_SECRET")
+
+# token verification middleware
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            return jsonify({"message": "Token is missing!"}), 401
+
+        try:
+            token = auth_header.split(" ")[1]
+            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            request.user_id = data["id"]
+        except Exception as e:
+            return jsonify({"message": "Token is invalid!", "error": str(e)}), 401
+
+        return f(*args, **kwargs)
+    return decorated
 
 # Initialize Flask app and set connection string from Vercel's dashboard
 app = Flask(__name__)
@@ -63,6 +85,7 @@ with app.app_context():
 
 # getting all activities of a user
 @app.route('/get-all-user-exercises', methods=['GET'])
+@token_required
 def get_all_user_exercises():
     params = {"id": "1232345", "email": "helloworld@example.com"} # change this to get params from request, think about security, maybe just have this be id and nothing else
     exercises = db.session.execute(db.select(ExerciseActivity)
@@ -74,6 +97,7 @@ def get_all_user_exercises():
 #TODO: add what error handling
 # deleting an activity of a user
 @app.route('/delete-exercise-activity', methods=['DELETE'])
+@token_required
 def delete_activity():
     data = request.get_json()
     delete = db.session.execute(db.delete(ExerciseActivity)
