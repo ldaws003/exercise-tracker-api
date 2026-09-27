@@ -1,13 +1,10 @@
 import os
 from flask import Flask, jsonify, request
 import enum
-from sqlalchemy import Enum
+from sqlalchemy import Enum, select, func
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 import jwt
-
-# TODO: make sure that only user's loggedin in main app can use this api
-# TODO: look into encryption to secure db
 
 # getting the connection string from environment variables
 connection_string = os.getenv("POSTGRES_DB")
@@ -16,7 +13,6 @@ connection_string = os.getenv("POSTGRES_DB")
 SECRET_KEY = os.getenv("AUTH_SECRET")
 
 # token verification middleware
-
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -65,18 +61,6 @@ class ExerciseActivity(db.Model):
     date = db.Column(db.Date, nullable=False)
     calories = db.Column(db.Integer, nullable=False)
 
-# TODO: check if this would overwrite existing tables
-
-# TODO: make into decorator and add as middleware to everything else
-# TODO: make sure frontend sends token to flask api end
-# try:
-#     idinfo = id_token.verify_oauth2_token(token, requests.Request(), "YOUR_GOOGLE_CLIEN_://googleusercontent.com")
-#     # user is signed in
-# except ValueError:
-#     # Invalid token
-#     pass
-
-
 # Create database tables in the PostgreSQL database
 with app.app_context():
     db.create_all()
@@ -94,7 +78,7 @@ def get_all_user_exercises():
                                    .order_by(ExerciseActivity.date)).scalars()
     return jsonify(exercises)
 
-#TODO: add what error handling
+#TODO: add error handling
 # deleting an activity of a user
 @app.route('/delete-exercise-activity', methods=['DELETE'])
 @token_required
@@ -102,10 +86,25 @@ def delete_activity():
     data = request.get_json()
     delete = db.session.execute(db.delete(ExerciseActivity)
                                 .where(ExerciseActivity.id == data.id)).commit()
-    return jsonify({})
+    return jsonify({"message": "Successful deletion"})
 
-# TODO: make api endpoint for getting exercise data for charts
 
+@app.route('/get-activities-chart-data', methods=['GET'])
+@token_required
+def get_activity_chart_data():
+    data = request.get_json()
+    chartResult = db.session.execute(db.select(ExerciseActivity, func.sum(ExerciseActivity.calories).label("calories"))
+                                     .join(Users, Users.id == ExerciseActivity.user_id)
+                                     .where(Users.id == data.id)
+                                     .group_by(ExerciseActivity.activity)
+                                     ).all()
+    return jsonify(chartResult)
+
+@app.route('/get-calories-chart-data', methods=['GET'])
+@token_required
+def get_calories_chart_data():
+    data = request.get_json()
+    return None
 
 if __name__ == "__main__":
     app.run(debug=True)
